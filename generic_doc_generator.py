@@ -25,6 +25,17 @@ class FunctionBlock(DocumentationBlock):
         self.return_info = return_info
 
 
+def divide_text_in_paragraphs(text):
+    description_parts = text.splitlines()
+
+    final_text = ""
+
+    for part in description_parts:
+        final_text += "<p>" + part.strip() + "</p>"
+
+    return final_text
+
+
 def get_tags_name_and_text(block_text):
     valid_lines = []
 
@@ -75,13 +86,18 @@ def create_block(block_text):
         else:
             tags_info[tag_name] = tag_text
 
+    description = ""
+
+    if "description" in tags_info.keys():
+        description = tags_info["description"]
+
     if "function" in tags_info.keys():
         return_info = None
 
         if "return" in tags_info:
             return_info = tags_info["return"]
 
-        return FunctionBlock(tags_info["function"], tags_info["description"], params_info, return_info)
+        return FunctionBlock(tags_info["function"], description, params_info, return_info)
     else:
         possible_names = ["container", "value"]
 
@@ -95,7 +111,7 @@ def create_block(block_text):
         if not key_name:
             return None
 
-        return DocumentationBlock(key_name, tags_info[key_name], tags_info["description"])
+        return DocumentationBlock(key_name, tags_info[key_name], description)
 
 
 def get_next_block(file_content, comment_end_string):
@@ -190,15 +206,27 @@ def create_value_documentation(doc_block):
     return value_template.format(NAME=doc_block.just_name(), DESCRIPTION=doc_block.description)
 
 
-def divide_text_in_paragraphs(text):
-    description_parts = text.splitlines()
+def create_container_elements_documentation(blocks):
+    values_title_added = False
+    functions_title_added = False
 
-    final_text = ""
+    content = ""
 
-    for part in description_parts:
-        final_text += "<p>" + part.strip() + "</p>"
+    for block in blocks:
+        if block.type == "value":
+            if not values_title_added:
+                content += "<h2>Values</h2>"
+                values_title_added = True
 
-    return final_text
+            content += create_value_documentation(block)
+        elif block.type == "function":
+            if not functions_title_added:
+                content += "<h2>Functions</h2>"
+                functions_title_added = True
+
+            content += create_function_documentation(block)
+
+    return content
 
 
 def create_container_documentation(doc_block):
@@ -220,33 +248,14 @@ def create_container_documentation(doc_block):
         </div>
     """
 
-    content = ""
-
     doc_block.child_blocks = sorted(doc_block.child_blocks, key=lambda b: b.type, reverse=True)
 
-    values_title_added = False
-    functions_title_added = False
-
-    for block in doc_block.child_blocks:
-        if block.type == "value":
-            if not values_title_added:
-                content += "<h2>Values</h2>"
-                values_title_added = True
-
-            content += create_value_documentation(block)
-        elif block.type == "function":
-            if not functions_title_added:
-                content += "<h2>Functions</h2>"
-                functions_title_added = True
-
-            content += create_function_documentation(block)
-
-    description = divide_text_in_paragraphs(doc_block.description)
-
-    return container_template.format(NAME=doc_block.name, DESCRIPTION=description, CONTENT=content)
+    return container_template.format(NAME=doc_block.name,
+                                     DESCRIPTION=divide_text_in_paragraphs(doc_block.description),
+                                     CONTENT=create_container_elements_documentation(doc_block.child_blocks))
 
 
-def create_main_page(template_text, containers, title, description):
+def create_main_page(template_text, containers, container_free_blocks, title, description):
     description_template = """
         <div class="container">
             <div class="row">
@@ -263,6 +272,7 @@ def create_main_page(template_text, containers, title, description):
             </div>
         </div>
     """
+
     container_template = """
         <div class="container">
             <div class="row">
@@ -280,11 +290,13 @@ def create_main_page(template_text, containers, title, description):
 
     main_page_content = description_template.format(TITLE=title, DESCRIPTION=divide_text_in_paragraphs(description))
 
-    container_number = len(containers)
+    main_page_content += create_container_elements_documentation(sorted(container_free_blocks,
+                                                                        key=lambda b: b.type,
+                                                                        reverse=True))
 
-    for i in range(container_number):
-        doc_block = containers[i][0]
-        file_name = containers[i][1]
+    for container in containers:
+        doc_block = container[0]
+        file_name = container[1]
 
         description = divide_text_in_paragraphs(doc_block.description)
 
@@ -322,7 +334,9 @@ def create_documentation(output_path, project_document_blocks, title, descriptio
     with open(file_src_dir + "template.html", "r") as file:
         template_text = file.read()
 
-    containers = []
+    containers_info = []
+
+    container_blocks = sorted(container_blocks, key=lambda c: c.name)
 
     for container in container_blocks:
         container_doc = create_container_documentation(container)
@@ -332,10 +346,10 @@ def create_documentation(output_path, project_document_blocks, title, descriptio
         with open(output_path + file_name, "w") as file:
             file.write(template_text.format(TITLE=container.name, BODY=container_doc))
 
-        containers.append((container, file_name))
+        containers_info.append((container, file_name))
 
     with open(output_path + "index.html", "w") as file:
-        file.write(create_main_page(template_text, containers, title, description))
+        file.write(create_main_page(template_text, containers_info, container_free_blocks, title, description))
 
 
 def main():
@@ -359,7 +373,8 @@ def main():
     for mandatory_tag in ["extensions", "input_path", "output_path", "title"]:
         if mandatory_tag not in tags_texts.keys():
             print(
-                "Incorrect {0} configuration file: Missing {1} tag".format(arguments.configuration_file, mandatory_tag))
+                    "Incorrect {0} configuration file: Missing {1} tag".format(arguments.configuration_file,
+                                                                               mandatory_tag))
 
     extensions = [extension.strip() for extension in tags_texts["extensions"].split(",")]
 
