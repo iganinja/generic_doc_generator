@@ -274,15 +274,13 @@ def create_main_page(template_text, containers, container_free_blocks, title, de
     """
 
     container_template = """
-        <div class="container">
-            <div class="row">
-                <div class="col-xs-12" style="cursor: pointer;" onclick="window.location='{FILE_NAME}'">
-                    <h1>
-                        <span class="label label-default">{NAME}</span>
-                    </h1>
-                    <div class="alert alert-block alert-success text-justify">
-                        {DESCRIPTION}
-                    <div>
+        <div class="row">
+            <div class="col-xs-12" style="cursor: pointer;" onclick="window.location='{FILE_NAME}'">
+                <h1>
+                    <span class="label label-default">{NAME}</span>
+                </h1>
+                <div class="alert alert-block alert-success text-justify">
+                    {DESCRIPTION}
                 </div>
             </div>
         </div>
