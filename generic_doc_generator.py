@@ -26,7 +26,14 @@ class FunctionBlock(DocumentationBlock):
 
 
 def get_tags_name_and_text(block_text):
-    text = block_text.strip()
+    valid_lines = []
+
+    for line in block_text.splitlines():
+        line_stripped = line.strip()
+        if len(line_stripped) > 0 and line_stripped[0] != "#":
+            valid_lines.append(line_stripped)
+
+    text = "\n".join(valid_lines)
 
     tags_and_texts = []
 
@@ -37,7 +44,7 @@ def get_tags_name_and_text(block_text):
             break
 
         index_end = text.find(" ", index_start)
-        tag_name = text[index_start + 1:index_end]
+        tag_name = text[index_start + 1:index_end].rstrip()
 
         index_start = index_end
         index_end = text.find("@", index_start)
@@ -45,7 +52,7 @@ def get_tags_name_and_text(block_text):
         if index_end == -1:
             index_end = len(text)
 
-        tag_text = text[index_start + 1:index_end].strip()
+        tag_text = text[index_start + 1:index_end].rstrip()
 
         tags_and_texts.append((tag_name, tag_text))
 
@@ -56,33 +63,17 @@ def get_tags_name_and_text(block_text):
 
 def create_block(block_text):
     tags_info = dict()
-    text = block_text.strip()
 
     params_info = []
 
-    while len(text) > 0:
-        index_start = text.find("@")
-
-        if index_start == -1:
-            break
-
-        index_end = text.find(" ", index_start)
-        tag_name = text[index_start + 1:index_end]
-
-        index_start = index_end
-        index_end = text.find("@", index_start)
-
-        if index_end == -1:
-            index_end = len(text)
-
-        tag_text = text[index_start + 1:index_end].strip()
+    for tag_text in get_tags_name_and_text(block_text):
+        tag_name = tag_text[0]
+        tag_text = tag_text[1]
 
         if tag_name == "param":
             params_info.append(tag_text)
         else:
             tags_info[tag_name] = tag_text
-
-        text = text[index_end:]
 
     if "function" in tags_info.keys():
         return_info = None
@@ -138,7 +129,7 @@ def get_file_documentation_blocks(file_path):
 def create_function_documentation(doc_block):
     function_template = """
         <div class="container">
-            <div class="row alert alert-block alert-info">
+            <div class="row alert alert-block alert-info text-justify">
                 <div class="col-xs-12">
                     <h4>
                         <span class="label label-success">
@@ -190,7 +181,7 @@ def create_value_documentation(doc_block):
                             {NAME}
                         </span>
                     </h4>
-                    <p><em>{DESCRIPTION}</em></p>
+                    <p class="text-justify"><em>{DESCRIPTION}</em></p>
                 </div>
             </div>
         </div>
@@ -218,7 +209,7 @@ def create_container_documentation(doc_block):
                     <h1>
                         <span class="label label-default">{NAME}</span>
                     </h1>
-                    <div class="alert alert-block alert-success">
+                    <div class="alert alert-block alert-success text-justify">
                         {DESCRIPTION}
                     <div>
                 </div>
@@ -255,7 +246,23 @@ def create_container_documentation(doc_block):
     return container_template.format(NAME=doc_block.name, DESCRIPTION=description, CONTENT=content)
 
 
-def create_main_page(template_text, containers):
+def create_main_page(template_text, containers, title, description):
+    description_template = """
+        <div class="container">
+            <div class="row">
+                <div class="col-xs-12">
+                    <div class="center-block">
+                        <h1>
+                            <span>{TITLE}</span>
+                        </h1>
+                        <div class="alert alert-block text-justify">
+                            {DESCRIPTION}
+                        <div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    """
     container_template = """
         <div class="container">
             <div class="row">
@@ -263,7 +270,7 @@ def create_main_page(template_text, containers):
                     <h1>
                         <span class="label label-default">{NAME}</span>
                     </h1>
-                    <div class="alert alert-block alert-success">
+                    <div class="alert alert-block alert-success text-justify">
                         {DESCRIPTION}
                     <div>
                 </div>
@@ -271,7 +278,7 @@ def create_main_page(template_text, containers):
         </div>
     """
 
-    main_page_content = ""
+    main_page_content = description_template.format(TITLE=title, DESCRIPTION=divide_text_in_paragraphs(description))
 
     container_number = len(containers)
 
@@ -284,10 +291,10 @@ def create_main_page(template_text, containers):
         main_page_content += container_template.format(NAME=doc_block.name, DESCRIPTION=description,
                                                        FILE_NAME=file_name)
 
-    return template_text.format(TITLE="JARE", BODY=main_page_content)
+    return template_text.format(TITLE=title, BODY=main_page_content)
 
 
-def create_documentation(output_path, project_document_blocks):
+def create_documentation(output_path, project_document_blocks, title, description):
     container_blocks = []
     container_free_blocks = []  # Blocks which are not container and are not in one
 
@@ -328,30 +335,48 @@ def create_documentation(output_path, project_document_blocks):
         containers.append((container, file_name))
 
     with open(output_path + "index.html", "w") as file:
-        file.write(create_main_page(template_text, containers))
+        file.write(create_main_page(template_text, containers, title, description))
 
 
 def main():
     parser = argparse.ArgumentParser(prog="Generic Document Generator")
-    parser.add_argument("extensions",
-                        help="Extensions to be taken into account, separated by commas. For example for .lua and .cpp files: lua,cpp")
-    parser.add_argument("output_path", help="Path where documentation files will be stored")
-    parser.add_argument("--input_path",
-                        help="Path where files to be parsed are in. If not provided current path (.) is used")
+    parser.add_argument("configuration_file",
+                        help="Configuration file is a simple text file containing the different configuration options GDG needs to do its job.")
+
     arguments = parser.parse_args()
 
-    file_names = []
-    extensions = arguments.extensions.split(",")
+    with open(arguments.configuration_file, "r") as configuration_file:
+        configuration_content = configuration_file.read()
 
-    output_path = arguments.output_path.replace("\\", "/")
+    tags_texts = dict()
 
+    for tag_text in get_tags_name_and_text(configuration_content):
+        tag_name = tag_text[0]
+        tag_text = tag_text[1]
+
+        tags_texts[tag_name] = tag_text
+
+    for mandatory_tag in ["extensions", "input_path", "output_path", "title"]:
+        if mandatory_tag not in tags_texts.keys():
+            print(
+                "Incorrect {0} configuration file: Missing {1} tag".format(arguments.configuration_file, mandatory_tag))
+
+    extensions = [extension.strip() for extension in tags_texts["extensions"].split(",")]
+
+    output_path = tags_texts["output_path"].replace("\\", "/")
     if output_path[-1] != "/":
         output_path += "/"
 
-    input_path = "."
+    input_path = tags_texts["input_path"].replace("\\", "/")
+    if input_path[-1] != "/":
+        input_path += "/"
 
-    if arguments.input_path:
-        input_path = arguments.input_path.replace("\\", "/")
+    main_title = tags_texts["title"]
+
+    description = ""
+
+    if "description" in tags_texts.keys():
+        description = tags_texts["description"]
 
     project_document_blocks = []
 
@@ -371,7 +396,7 @@ def main():
 
     print("Total document blocks: {0}".format(len(project_document_blocks)))
 
-    create_documentation(output_path, project_document_blocks)
+    create_documentation(output_path, project_document_blocks, main_title, description)
 
 
 main()
