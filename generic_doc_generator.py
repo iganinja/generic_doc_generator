@@ -11,6 +11,12 @@ class DocumentationBlock:
         self.name = name
         self.description = description
 
+    def just_name(self):
+        if "." not in self.name:
+            return self.name
+        else:
+            return self.name[self.name.find(".") + 1:]
+
 
 class FunctionBlock(DocumentationBlock):
     def __init__(self, name, description, params_info, return_info):
@@ -18,11 +24,34 @@ class FunctionBlock(DocumentationBlock):
         self.params_info = params_info
         self.return_info = return_info
 
-    def just_name(self):
-        if "." not in self.name:
-            return self.name
-        else:
-            return self.name[self.name.find(".") + 1:]
+
+def get_tags_name_and_text(block_text):
+    text = block_text.strip()
+
+    tags_and_texts = []
+
+    while len(text) > 0:
+        index_start = text.find("@")
+
+        if index_start == -1:
+            break
+
+        index_end = text.find(" ", index_start)
+        tag_name = text[index_start + 1:index_end]
+
+        index_start = index_end
+        index_end = text.find("@", index_start)
+
+        if index_end == -1:
+            index_end = len(text)
+
+        tag_text = text[index_start + 1:index_end].strip()
+
+        tags_and_texts.append((tag_name, tag_text))
+
+        text = text[index_end:]
+
+    return tags_and_texts
 
 
 def create_block(block_text):
@@ -56,7 +85,6 @@ def create_block(block_text):
         text = text[index_end:]
 
     if "function" in tags_info.keys():
-
         return_info = None
 
         if "return" in tags_info:
@@ -66,10 +94,15 @@ def create_block(block_text):
     else:
         possible_names = ["container", "value"]
 
+        key_name = None
+
         for name in possible_names:
             if name in tags_info:
                 key_name = name
                 break
+
+        if not key_name:
+            return None
 
         return DocumentationBlock(key_name, tags_info[key_name], tags_info["description"])
 
@@ -148,12 +181,37 @@ def create_function_documentation(doc_block):
 
 
 def create_value_documentation(doc_block):
-    pass
+    value_template = """
+        <div class="container">
+            <div class="row alert alert-block alert-warning">
+                <div class="col-xs-12">
+                    <h4>
+                        <span class="label label-success">
+                            {NAME}
+                        </span>
+                    </h4>
+                    <p><em>{DESCRIPTION}</em></p>
+                </div>
+            </div>
+        </div>
+    """
+
+    return value_template.format(NAME=doc_block.just_name(), DESCRIPTION=doc_block.description)
+
+
+def divide_text_in_paragraphs(text):
+    description_parts = text.splitlines()
+
+    final_text = ""
+
+    for part in description_parts:
+        final_text += "<p>" + part.strip() + "</p>"
+
+    return final_text
 
 
 def create_container_documentation(doc_block):
     container_template = """
-        <!--Row with single column-->
         <div class="container">
             <div class="row">
                 <div class="col-xs-12">
@@ -173,28 +231,65 @@ def create_container_documentation(doc_block):
 
     content = ""
 
-    doc_block.child_blocks = sorted(doc_block.child_blocks, key=lambda b: b.type)
+    doc_block.child_blocks = sorted(doc_block.child_blocks, key=lambda b: b.type, reverse=True)
+
+    values_title_added = False
+    functions_title_added = False
 
     for block in doc_block.child_blocks:
-        if block.type == "function":
-            content += create_function_documentation(block)
         if block.type == "value":
+            if not values_title_added:
+                content += "<h2>Values</h2>"
+                values_title_added = True
+
             content += create_value_documentation(block)
+        elif block.type == "function":
+            if not functions_title_added:
+                content += "<h2>Functions</h2>"
+                functions_title_added = True
 
-    description_parts = doc_block.description.splitlines()
-    description = ""
+            content += create_function_documentation(block)
 
-    for part in description_parts:
-        description += "<p>" + part.strip() + "</p>"
+    description = divide_text_in_paragraphs(doc_block.description)
 
     return container_template.format(NAME=doc_block.name, DESCRIPTION=description, CONTENT=content)
 
 
-def create_documentation(output_path, project_document_blocks):
-    # doc_blocks = sorted(project_document_blocks, key=lambda block: block.type)
+def create_main_page(template_text, containers):
+    container_template = """
+        <div class="container">
+            <div class="row">
+                <div class="col-xs-12" style="cursor: pointer;" onclick="window.location='{FILE_NAME}'">
+                    <h1>
+                        <span class="label label-default">{NAME}</span>
+                    </h1>
+                    <div class="alert alert-block alert-success">
+                        {DESCRIPTION}
+                    <div>
+                </div>
+            </div>
+        </div>
+    """
 
+    main_page_content = ""
+
+    container_number = len(containers)
+
+    for i in range(container_number):
+        doc_block = containers[i][0]
+        file_name = containers[i][1]
+
+        description = divide_text_in_paragraphs(doc_block.description)
+
+        main_page_content += container_template.format(NAME=doc_block.name, DESCRIPTION=description,
+                                                       FILE_NAME=file_name)
+
+    return template_text.format(TITLE="JARE", BODY=main_page_content)
+
+
+def create_documentation(output_path, project_document_blocks):
     container_blocks = []
-    container_free_blocks = []  # Blocks which are not container and has no one
+    container_free_blocks = []  # Blocks which are not container and are not in one
 
     for block in project_document_blocks:
         if block.type == "container":
@@ -220,20 +315,20 @@ def create_documentation(output_path, project_document_blocks):
     with open(file_src_dir + "template.html", "r") as file:
         template_text = file.read()
 
+    containers = []
+
     for container in container_blocks:
         container_doc = create_container_documentation(container)
 
-        with open(output_path + container.name.replace(".", "_").lower() + ".html", "w") as file:
+        file_name = container.name.replace(".", "_").lower() + ".html"
+
+        with open(output_path + file_name, "w") as file:
             file.write(template_text.format(TITLE=container.name, BODY=container_doc))
 
-            # container_path = block.name.split(".")
-            # print(container_path)
+        containers.append((container, file_name))
 
-            #
-            # template_text = template_text.format(TITLE="MY DOCUMENTATION!", BODY="JARE")
-            #
-            # with open(output_path + "test.html", "w") as file:
-            #     file.write(template_text)
+    with open(output_path + "index.html", "w") as file:
+        file.write(create_main_page(template_text, containers))
 
 
 def main():
