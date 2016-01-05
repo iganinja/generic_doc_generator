@@ -315,6 +315,11 @@ def create_container_elements_documentation(blocks):
 def create_container_documentation(doc_block):
     container_template = """
         <div class="container">
+            <div class="row" style="margin-top:10px">
+                <div class="col-xs-12">
+                    <button type="button" class="btn btn-md btn-info pull-right" onclick="window.location='index.html'">Back to index</button>
+                </div>
+            </div>
             <div class="row">
                 <div class="col-xs-12">
                     <h1>
@@ -328,6 +333,11 @@ def create_container_documentation(doc_block):
             </div>
             <div>
                 {CONTENT}
+            </div>
+            <div class="row" style="margin-bottom:10px">
+                <div class="col-xs-12">
+                    <button type="button" class="btn btn-md btn-info pull-right" onclick="window.location='index.html'">Back to index</button>
+                </div>
             </div>
         </div>
     """
