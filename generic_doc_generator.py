@@ -223,7 +223,7 @@ def create_function_documentation(doc_block):
                             {NAME}
                         </span>
                     </h4>
-                    <p><em>{DESCRIPTION}</em></p>
+                    <p>{DESCRIPTION}</p>
                     <div>
                         {PARAMS_AND_RETURN}
                     </div>
@@ -263,7 +263,7 @@ def create_function_documentation(doc_block):
     return function_template.format(NAME=doc_block.just_name(),
                                     FUNCTION_ID=get_id_name(doc_block.just_name()),
                                     DESCRIPTION=doc_block.description,
-                                    PARAMS_AND_RETURN=params_and_return,
+                                    PARAMS_AND_RETURN=process_description_text(params_and_return),
                                     MORE=doc_block.more)
 
 
@@ -277,8 +277,8 @@ def create_value_documentation(doc_block):
                             {NAME}
                         </span>
                     </h4>
-                    <p class="text-justify"><em>{DESCRIPTION}</em></p>
-                    <p class="text-justify"><em>{MORE}</em></p>
+                    <p class="text-justify">{DESCRIPTION}</p>
+                    <p class="text-justify">{MORE}</p>
                 </div>
             </div>
         </div>
