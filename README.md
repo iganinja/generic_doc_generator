@@ -3,6 +3,8 @@ A very, very simple, generic documentation generator for APIs in just one Python
 
 For nice html presentation it uses [Bootstrap](http://getbootstrap.com/) and [highlightjs](https://highlightjs.org/)
 
+![shot1](https://cloud.githubusercontent.com/assets/8440619/12129671/5fa25f44-b405-11e5-9a5e-6af755780320.png)
+
 Generator offers just the following tags:
 - `@container`: indicates a class, table or anything which can be modeled as a container
 - `@function`: a free function or a method
@@ -32,3 +34,4 @@ Python script expect just the path of the configuration file as command line par
 
 Optionally it can include `@description` tag, which will be shown below documentation title in the main page
 
+Script needs `template.html` and the folder and the contents of `files_to_copy` in order to create the documentation files
