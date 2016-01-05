@@ -1,6 +1,8 @@
 import os
 import argparse
 import shutil
+import re
+import glob
 
 comment_ends = dict(h="*/", cpp="*/", lua="]]--")
 
@@ -15,7 +17,7 @@ class DocumentationBlock:
         if "." not in self.name:
             return self.name
         else:
-            return self.name[self.name.find(".") + 1:]
+            return self.name[self.name.rfind(".") + 1:]
 
 
 class FunctionBlock(DocumentationBlock):
@@ -25,22 +27,84 @@ class FunctionBlock(DocumentationBlock):
         self.return_info = return_info
 
 
+def get_id_name(name):
+    bare_bone_name = ""
+
+    for i in range(len(name.split(" ")[0])):
+        if name[i].isalpha():
+            bare_bone_name += name[i]
+        else:
+            break
+
+    return bare_bone_name
+
+
 def divide_text_in_paragraphs(text):
-    description_parts = text.splitlines()
+    description_parts = text.rstrip().splitlines()
 
     final_text = ""
 
     for part in description_parts:
-        final_text += "<p>" + part.strip() + "</p>"
+        stripped = part.rstrip()
+        if len(stripped) > 0:
+            if "[code[" in stripped or "]code]" in stripped:
+                final_text += stripped.strip()
+            else:
+                final_text += "<p>" + stripped + "</p>"
 
     return final_text
+
+
+def add_links(html_text):
+    processed_text = html_text
+    regular_expression = re.compile("(\[\[.*?\|.*?\]\])")
+    link_tags = regular_expression.findall(processed_text)
+
+    if not link_tags:
+        return processed_text
+
+    link_html = """<a href='{URL}' style="text-decoration: none;"><code>{TEXT}</code></a>"""
+
+    for link_tag in link_tags:
+        link_info = link_tag.replace("[[", "").replace("]]", "")
+        link_parts = link_info.split("|")
+
+        url = ""
+
+        if "." not in link_parts[1]:
+            url = "index.html#" + link_parts[1]
+        else:
+            url_parts = link_parts[1].split(".")
+            for i in range(len(url_parts) - 1):
+                url += "_" + url_parts[i]
+
+            url += "_.html#" + url_parts[-1]
+
+        processed_text = processed_text.replace(link_tag, link_html.format(URL=url, TEXT=link_parts[0]))
+
+    return processed_text
+
+
+def add_code_parts(html_text):
+    if "[code[" and "]code]" in html_text:
+        return html_text.replace("[code[", "<pre><code>").replace("]code]", "</code></pre>")
+    else:
+        return html_text.rstrip()
+
+
+def process_description_text(text):
+    return add_code_parts(add_links(divide_text_in_paragraphs(text)))
 
 
 def get_tags_name_and_text(block_text):
     valid_lines = []
 
     for line in block_text.splitlines():
-        line_stripped = line.strip()
+        if not line.startswith("   "):
+            line_stripped = line.strip()
+        else:
+            line_stripped = line
+
         if len(line_stripped) > 0 and line_stripped[0] != "#":
             valid_lines.append(line_stripped)
 
@@ -111,7 +175,7 @@ def create_block(block_text):
         if not key_name:
             return None
 
-        return DocumentationBlock(key_name, tags_info[key_name], description)
+        return DocumentationBlock(key_name, tags_info[key_name], process_description_text(description))
 
 
 def get_next_block(file_content, comment_end_string):
@@ -148,7 +212,7 @@ def create_function_documentation(doc_block):
             <div class="row alert alert-block alert-info text-justify">
                 <div class="col-xs-12">
                     <h4>
-                        <span class="label label-success">
+                        <span class="label label-success" id="{FUNCTION_ID}">
                             {NAME}
                         </span>
                     </h4>
@@ -179,12 +243,15 @@ def create_function_documentation(doc_block):
         space_index = param_info.find(" ")
         name = param_info[0:space_index]
         description = param_info[space_index:]
-        content += parameter_template.format(NAME=name, DESCRIPTION=description)
+        content += parameter_template.format(NAME=name, DESCRIPTION=process_description_text(description))
 
     if doc_block.return_info:
-        content += return_template.format(DESCRIPTION=" " + doc_block.return_info)
+        content += return_template.format(DESCRIPTION=" " + process_description_text(doc_block.return_info))
 
-    return function_template.format(NAME=doc_block.just_name(), DESCRIPTION=doc_block.description, CONTENT=content)
+    return function_template.format(NAME=doc_block.just_name(),
+                                    FUNCTION_ID=get_id_name(doc_block.just_name()),
+                                    DESCRIPTION=process_description_text(doc_block.description),
+                                    CONTENT=content)
 
 
 def create_value_documentation(doc_block):
@@ -203,7 +270,8 @@ def create_value_documentation(doc_block):
         </div>
     """
 
-    return value_template.format(NAME=doc_block.just_name(), DESCRIPTION=doc_block.description)
+    return value_template.format(NAME=doc_block.just_name(),
+                                 DESCRIPTION=process_description_text(doc_block.description))
 
 
 def create_container_elements_documentation(blocks):
@@ -251,7 +319,7 @@ def create_container_documentation(doc_block):
     doc_block.child_blocks = sorted(doc_block.child_blocks, key=lambda b: b.type, reverse=True)
 
     return container_template.format(NAME=doc_block.name,
-                                     DESCRIPTION=divide_text_in_paragraphs(doc_block.description),
+                                     DESCRIPTION=process_description_text(doc_block.description),
                                      CONTENT=create_container_elements_documentation(doc_block.child_blocks))
 
 
@@ -286,7 +354,8 @@ def create_main_page(template_text, containers, container_free_blocks, title, de
         </div>
     """
 
-    main_page_content = description_template.format(TITLE=title, DESCRIPTION=divide_text_in_paragraphs(description))
+    main_page_content = description_template.format(TITLE=title,
+                                                    DESCRIPTION=process_description_text(description))
 
     main_page_content += create_container_elements_documentation(sorted(container_free_blocks,
                                                                         key=lambda b: b.type,
@@ -296,12 +365,17 @@ def create_main_page(template_text, containers, container_free_blocks, title, de
         doc_block = container[0]
         file_name = container[1]
 
-        description = divide_text_in_paragraphs(doc_block.description)
+        description = process_description_text(doc_block.description)
 
         main_page_content += container_template.format(NAME=doc_block.name, DESCRIPTION=description,
                                                        FILE_NAME=file_name)
 
     return template_text.format(TITLE=title, BODY=main_page_content)
+
+
+def copy_needed_files(file_src_dir, output_path):
+    for file in glob.glob(file_src_dir + "files_to_copy/*.*"):
+        shutil.copy(file, output_path)
 
 
 def create_documentation(output_path, project_document_blocks, title, description):
@@ -327,7 +401,7 @@ def create_documentation(output_path, project_document_blocks, title, descriptio
 
     file_src_dir = os.path.dirname(os.path.realpath(__file__)) + "/"
 
-    shutil.copy(file_src_dir + "bootstrap.min.css", output_path)
+    copy_needed_files(file_src_dir, output_path)
 
     with open(file_src_dir + "template.html", "r") as file:
         template_text = file.read()
@@ -339,7 +413,7 @@ def create_documentation(output_path, project_document_blocks, title, descriptio
     for container in container_blocks:
         container_doc = create_container_documentation(container)
 
-        file_name = container.name.replace(".", "_").lower() + ".html"
+        file_name = "_" + container.name.replace(".", "_").lower() + "_.html"
 
         with open(output_path + file_name, "w") as file:
             file.write(template_text.format(TITLE=container.name, BODY=container_doc))
