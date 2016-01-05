@@ -8,10 +8,11 @@ comment_ends = dict(h="*/", cpp="*/", lua="]]--")
 
 
 class DocumentationBlock:
-    def __init__(self, type, name, description):
+    def __init__(self, type, name, description, more):
         self.type = type
         self.name = name
         self.description = description
+        self.more = more
 
     def just_name(self):
         if "." not in self.name:
@@ -21,8 +22,8 @@ class DocumentationBlock:
 
 
 class FunctionBlock(DocumentationBlock):
-    def __init__(self, name, description, params_info, return_info):
-        DocumentationBlock.__init__(self, "function", name, description)
+    def __init__(self, name, description, more, params_info, return_info):
+        DocumentationBlock.__init__(self, "function", name, description, more)
         self.params_info = params_info
         self.return_info = return_info
 
@@ -151,9 +152,12 @@ def create_block(block_text):
             tags_info[tag_name] = tag_text
 
     description = ""
-
     if "description" in tags_info.keys():
-        description = tags_info["description"]
+        description = process_description_text(tags_info["description"])
+
+    more = ""
+    if "more" in tags_info.keys():
+        more = process_description_text(tags_info["more"])
 
     if "function" in tags_info.keys():
         return_info = None
@@ -161,7 +165,7 @@ def create_block(block_text):
         if "return" in tags_info:
             return_info = tags_info["return"]
 
-        return FunctionBlock(tags_info["function"], description, params_info, return_info)
+        return FunctionBlock(tags_info["function"], description, more, params_info, return_info)
     else:
         possible_names = ["container", "value"]
 
@@ -175,7 +179,10 @@ def create_block(block_text):
         if not key_name:
             return None
 
-        return DocumentationBlock(key_name, tags_info[key_name], process_description_text(description))
+        return DocumentationBlock(key_name,
+                                  tags_info[key_name],
+                                  description,
+                                  more)
 
 
 def get_next_block(file_content, comment_end_string):
@@ -218,8 +225,13 @@ def create_function_documentation(doc_block):
                     </h4>
                     <p><em>{DESCRIPTION}</em></p>
                     <div>
-                        {CONTENT}
+                        {PARAMS_AND_RETURN}
                     </div>
+                    <p>
+                        <div>
+                            {MORE}
+                        </div>
+                    </p>
                 </div>
             </div>
         </div>
@@ -237,21 +249,22 @@ def create_function_documentation(doc_block):
         </div>
     """
 
-    content = ""
+    params_and_return = ""
 
     for param_info in doc_block.params_info:
         space_index = param_info.find(" ")
         name = param_info[0:space_index]
         description = param_info[space_index:]
-        content += parameter_template.format(NAME=name, DESCRIPTION=process_description_text(description))
+        params_and_return += parameter_template.format(NAME=name, DESCRIPTION=description)
 
     if doc_block.return_info:
-        content += return_template.format(DESCRIPTION=" " + process_description_text(doc_block.return_info))
+        params_and_return += return_template.format(DESCRIPTION=" " + doc_block.return_info)
 
     return function_template.format(NAME=doc_block.just_name(),
                                     FUNCTION_ID=get_id_name(doc_block.just_name()),
-                                    DESCRIPTION=process_description_text(doc_block.description),
-                                    CONTENT=content)
+                                    DESCRIPTION=doc_block.description,
+                                    PARAMS_AND_RETURN=params_and_return,
+                                    MORE=doc_block.more)
 
 
 def create_value_documentation(doc_block):
@@ -265,13 +278,15 @@ def create_value_documentation(doc_block):
                         </span>
                     </h4>
                     <p class="text-justify"><em>{DESCRIPTION}</em></p>
+                    <p class="text-justify"><em>{MORE}</em></p>
                 </div>
             </div>
         </div>
     """
 
     return value_template.format(NAME=doc_block.just_name(),
-                                 DESCRIPTION=process_description_text(doc_block.description))
+                                 DESCRIPTION=doc_block.description,
+                                 MORE=doc_block.more)
 
 
 def create_container_elements_documentation(blocks):
@@ -306,7 +321,8 @@ def create_container_documentation(doc_block):
                         <span class="label label-default">{NAME}</span>
                     </h1>
                     <div class="alert alert-block alert-success text-justify">
-                        {DESCRIPTION}
+                        <p>{DESCRIPTION}</p
+                        <p>{MORE}</p>
                     <div>
                 </div>
             </div>
@@ -319,7 +335,8 @@ def create_container_documentation(doc_block):
     doc_block.child_blocks = sorted(doc_block.child_blocks, key=lambda b: b.type, reverse=True)
 
     return container_template.format(NAME=doc_block.name,
-                                     DESCRIPTION=process_description_text(doc_block.description),
+                                     DESCRIPTION=doc_block.description,
+                                     MORE=doc_block.more,
                                      CONTENT=create_container_elements_documentation(doc_block.child_blocks))
 
 
@@ -355,7 +372,7 @@ def create_main_page(template_text, containers, container_free_blocks, title, de
     """
 
     main_page_content = description_template.format(TITLE=title,
-                                                    DESCRIPTION=process_description_text(description))
+                                                    DESCRIPTION=description)
 
     main_page_content += create_container_elements_documentation(sorted(container_free_blocks,
                                                                         key=lambda b: b.type,
@@ -365,7 +382,7 @@ def create_main_page(template_text, containers, container_free_blocks, title, de
         doc_block = container[0]
         file_name = container[1]
 
-        description = process_description_text(doc_block.description)
+        description = doc_block.description
 
         main_page_content += container_template.format(NAME=doc_block.name, DESCRIPTION=description,
                                                        FILE_NAME=file_name)
