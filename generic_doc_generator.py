@@ -215,24 +215,22 @@ def get_file_documentation_blocks(file_path):
 
 def create_function_documentation(doc_block):
     function_template = """
-        <div class="container">
-            <div class="row alert alert-block alert-info text-justify">
-                <div class="col-xs-12">
-                    <h4>
-                        <span class="label label-success" id="{FUNCTION_ID}">
-                            {NAME}
-                        </span>
-                    </h4>
-                    <p>{DESCRIPTION}</p>
-                    <div>
-                        {PARAMS_AND_RETURN}
-                    </div>
-                    <p>
-                        <div>
-                            {MORE}
-                        </div>
-                    </p>
+        <div class="row alert alert-block alert-info text-justify">
+            <div class="col-xs-12">
+                <h4>
+                    <span class="label label-success" id="{FUNCTION_ID}">
+                        {NAME}
+                    </span>
+                </h4>
+                <p>{DESCRIPTION}</p>
+                <div>
+                    {PARAMS_AND_RETURN}
                 </div>
+                <p>
+                    <div>
+                        {MORE}
+                    </div>
+                </p>
             </div>
         </div>
     """
@@ -269,17 +267,15 @@ def create_function_documentation(doc_block):
 
 def create_value_documentation(doc_block):
     value_template = """
-        <div class="container">
-            <div class="row alert alert-block alert-warning">
-                <div class="col-xs-12">
-                    <h4>
-                        <span class="label label-success">
-                            {NAME}
-                        </span>
-                    </h4>
-                    <p class="text-justify">{DESCRIPTION}</p>
-                    <p class="text-justify">{MORE}</p>
-                </div>
+        <div class="row alert alert-block alert-warning">
+            <div class="col-xs-12">
+                <h4>
+                    <span class="label label-success">
+                        {NAME}
+                    </span>
+                </h4>
+                <p class="text-justify">{DESCRIPTION}</p>
+                <p class="text-justify">{MORE}</p>
             </div>
         </div>
     """
@@ -328,12 +324,10 @@ def create_container_documentation(doc_block):
                     <div class="alert alert-block alert-success text-justify">
                         <p>{DESCRIPTION}</p
                         <p>{MORE}</p>
-                    <div>
+                    </div>
                 </div>
             </div>
-            <div>
-                {CONTENT}
-            </div>
+            {CONTENT}
             <div class="row" style="margin-bottom:10px">
                 <div class="col-xs-12">
                     <button type="button" class="btn btn-md btn-info pull-right" onclick="window.location='index.html'">Back to index</button>
