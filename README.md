@@ -34,3 +34,4 @@ Python script expect just the path of the configuration file as command line par
 
 Optionally it can include `@description` tag, which will be shown below documentation title in the main page
 
+Script needs template.html and the folder and the contents of `files_to_copy` in order to create the documentation files
