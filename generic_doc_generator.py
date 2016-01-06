@@ -32,12 +32,12 @@ def get_id_name(name):
     bare_bone_name = ""
 
     for i in range(len(name.split(" ")[0])):
-        if name[i].isalpha():
+        if name[i].isalnum() or name[i] == "_":
             bare_bone_name += name[i]
         else:
             break
 
-    return bare_bone_name
+    return bare_bone_name.lower()
 
 
 def divide_text_in_paragraphs(text):
@@ -56,7 +56,7 @@ def divide_text_in_paragraphs(text):
     return final_text
 
 
-def add_links(html_text):
+def add_links(html_text, container_names):
     processed_text = html_text
     regular_expression = re.compile("(\[\[.*?\|.*?\]\])")
     link_tags = regular_expression.findall(processed_text)
@@ -68,18 +68,25 @@ def add_links(html_text):
 
     for link_tag in link_tags:
         link_info = link_tag.replace("[[", "").replace("]]", "")
-        link_parts = link_info.split("|")
+        link_parts = [part.lower() for part in link_info.split("|")]
 
         url = ""
 
         if "." not in link_parts[1]:
-            url = "index.html#" + link_parts[1]
+            if link_parts[1] in container_names:
+                url = "_" + link_parts[1] + "_.html"
+            else:
+                url = "index.html#" + link_parts[1]
         else:
             url_parts = link_parts[1].split(".")
+
             for i in range(len(url_parts) - 1):
                 url += "_" + url_parts[i]
 
-            url += "_.html#" + url_parts[-1]
+            if url_parts[-1] in container_names:
+                url += "_" + url_parts[-1] + "_.html"
+            else:
+                url += "_.html#" + url_parts[-1]
 
         processed_text = processed_text.replace(link_tag, link_html.format(URL=url, TEXT=link_parts[0]))
 
@@ -93,8 +100,8 @@ def add_code_parts(html_text):
         return html_text.rstrip()
 
 
-def process_description_text(text):
-    return add_code_parts(add_links(divide_text_in_paragraphs(text)))
+def process_description_text(text, container_names):
+    return add_code_parts(add_links(divide_text_in_paragraphs(text), container_names))
 
 
 def get_tags_name_and_text(block_text):
@@ -153,11 +160,11 @@ def create_block(block_text):
 
     description = ""
     if "description" in tags_info.keys():
-        description = process_description_text(tags_info["description"])
+        description = tags_info["description"]
 
     more = ""
     if "more" in tags_info.keys():
-        more = process_description_text(tags_info["more"])
+        more = tags_info["more"]
 
     if "function" in tags_info.keys():
         return_info = None
@@ -253,15 +260,19 @@ def create_function_documentation(doc_block):
         space_index = param_info.find(" ")
         name = param_info[0:space_index]
         description = param_info[space_index:]
-        params_and_return += parameter_template.format(NAME=name, DESCRIPTION=description)
+        params_and_return += add_code_parts(divide_text_in_paragraphs(
+                parameter_template.format(NAME=name,
+                                          DESCRIPTION=description)))
 
     if doc_block.return_info:
-        params_and_return += return_template.format(DESCRIPTION=" " + doc_block.return_info)
+        params_and_return += add_code_parts(
+                divide_text_in_paragraphs(
+                        return_template.format(DESCRIPTION=" " + doc_block.return_info)))
 
     return function_template.format(NAME=doc_block.just_name(),
                                     FUNCTION_ID=get_id_name(doc_block.just_name()),
                                     DESCRIPTION=doc_block.description,
-                                    PARAMS_AND_RETURN=process_description_text(params_and_return),
+                                    PARAMS_AND_RETURN=params_and_return,
                                     MORE=doc_block.more)
 
 
@@ -270,7 +281,7 @@ def create_value_documentation(doc_block):
         <div class="row alert alert-block alert-warning">
             <div class="col-xs-12">
                 <h4>
-                    <span class="label label-success">
+                    <span class="label label-success" id="{VALUE_ID}">
                         {NAME}
                     </span>
                 </h4>
@@ -281,6 +292,7 @@ def create_value_documentation(doc_block):
     """
 
     return value_template.format(NAME=doc_block.just_name(),
+                                 VALUE_ID=get_id_name(doc_block.just_name()),
                                  DESCRIPTION=doc_block.description,
                                  MORE=doc_block.more)
 
@@ -344,7 +356,7 @@ def create_container_documentation(doc_block):
                                      CONTENT=create_container_elements_documentation(doc_block.child_blocks))
 
 
-def create_main_page(template_text, containers, container_free_blocks, title, description):
+def create_main_page(template_text, containers, container_names, container_free_blocks, title, description):
     description_template = """
         <div class="container">
             <div class="row">
@@ -375,8 +387,9 @@ def create_main_page(template_text, containers, container_free_blocks, title, de
         </div>
     """
 
-    main_page_content = description_template.format(TITLE=title,
-                                                    DESCRIPTION=description)
+    main_page_content = process_description_text(description_template.format(TITLE=title,
+                                                                             DESCRIPTION=description),
+                                                 container_names)
 
     main_page_content += create_container_elements_documentation(sorted(container_free_blocks,
                                                                         key=lambda b: b.type,
@@ -410,7 +423,21 @@ def create_documentation(output_path, project_document_blocks, title, descriptio
         elif "." not in block.name:  # It's possible that we have a free function or value (without a container)
             container_free_blocks.append(block)
 
+    container_names = [b.just_name().lower() for b in container_blocks]
+
     for block in project_document_blocks:
+        if len(block.description) > 0:
+            block.description = process_description_text(block.description, container_names)
+        if len(block.more) > 0:
+            block.more = process_description_text(block.more, container_names)
+
+        if block.type == "function":
+            for i in range(len(block.params_info)):
+                block.params_info[i] = add_links(block.params_info[i], container_names)
+
+            if block.return_info:
+                block.return_info = add_links(block.return_info, container_names)
+
         if block not in container_blocks and block not in container_free_blocks:
             block_container_name = block.name[:block.name.rfind(".")]
             for container in container_blocks:
@@ -442,7 +469,8 @@ def create_documentation(output_path, project_document_blocks, title, descriptio
         containers_info.append((container, file_name))
 
     with open(output_path + "index.html", "w") as file:
-        file.write(create_main_page(template_text, containers_info, container_free_blocks, title, description))
+        file.write(create_main_page(template_text, containers_info, container_names, container_free_blocks, title,
+                                    description))
 
 
 def main():
