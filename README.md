@@ -3,7 +3,7 @@ A very, very simple, generic documentation generator for APIs in just one Python
 
 For nice html presentation it uses [Bootstrap](http://getbootstrap.com/) and [highlightjs](https://highlightjs.org/)
 
-![shot1](https://cloud.githubusercontent.com/assets/8440619/12129671/5fa25f44-b405-11e5-9a5e-6af755780320.png)
+![shot1](https://cloud.githubusercontent.com/assets/8440619/18614879/a88b20ae-7d97-11e6-966e-017458e2f9cf.png)
 
 Generator offers just the following tags:
 - `@container`: indicates a class, table or anything which can be modeled as a container
